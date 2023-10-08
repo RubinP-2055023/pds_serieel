@@ -73,9 +73,9 @@ Arguments:
    Debug option - do NOT use this when timing your program!
 
    Should also only log data during the first repetition. The resulting CSV 
-   file first logs the randomly chosen centroids from the input data, and for
-   each step in the sequence, the updated centroids are logged. The program 
-   'visualize_centroids.py' can be used to visualize how the centroids change.
+   file first logs the randomly chosen centroidIndices from the input data, and for
+   each step in the sequence, the updated centroidIndices are logged. The program 
+   'visualize_centroidIndices.py' can be used to visualize how the centroidIndices change.
    
 )XYZ";
 	exit(-1);
@@ -131,30 +131,25 @@ FileCSVWriter openDebugFile(const std::string &n)
 	return f;
 }
 
-int find_closest_centroid_and_distance(std::vector<double> &allData, int pointIndex, std::vector<size_t> &centroidIndices, double &distanceBetweenCentroidAndPoint, size_t &newCentroidIndex, int numCols)
-{
-	
-	// For each centroid in the dataset calculate the distance between the centroid and the point keeping the dimensions in mind
-	for (int centroidIndex = 0; centroidIndex < centroidIndices.size(); ++centroidIndex)
-	{
-		// Calculate the distance between the centroid and the point
-		double distance = 0;
-		for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-		{
-			// Calculate the distance between the centroid and the point 
-			// std::cout << allData[pointIndex * numCols + dimensionIndex] << " - " << allData[centroidIndices[centroidIndex] * numCols + dimensionIndex] << " = " << allData[pointIndex * numCols + dimensionIndex] - allData[centroidIndices[centroidIndex] * numCols + dimensionIndex] << std::endl;
-			distance += pow(allData[pointIndex * numCols + dimensionIndex] - allData[centroidIndices[centroidIndex] * numCols + dimensionIndex], 2);
-		}
-		distance = sqrt(distance);
-		if (distance < distanceBetweenCentroidAndPoint)
-		{
-			std::cout << "New " << centroidIndex << std::endl;
-			distanceBetweenCentroidAndPoint = distance;
-			newCentroidIndex = centroidIndex;
-		}
-	}
-	return 0;
+std::pair<size_t, double> find_closest_centroid_index_and_distance(std::vector<double> &allData, int pointIndex, std::vector<size_t> &centroidIndices, int numCols) {
+    size_t closestCentroidIndex = 0;
+    double closestDistance = std::numeric_limits<double>::max();
+
+    for (size_t centroidIndex = 0; centroidIndex < centroidIndices.size(); ++centroidIndex) {
+        double distance = 0;
+        for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex) {
+            distance += pow(allData[pointIndex * numCols + dimensionIndex] - allData[centroidIndices[centroidIndex] * numCols + dimensionIndex], 2);
+        }
+        distance = sqrt(distance);
+
+        if (distance < closestDistance) {
+            closestDistance = distance;
+            closestCentroidIndex = centroidIndex;
+        }
+    }
+    return std::make_pair(closestCentroidIndex, closestDistance);
 }
+
 
 int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFileName,
 		   int numClusters, int repetitions, int numBlocks, int numThreads,
@@ -190,27 +185,27 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
 
 	double bestDistSquaredSum = std::numeric_limits<double>::max(); // can only get better
 	std::vector<size_t> stepsPerRepetition(repetitions);			// to save the number of steps each rep needed
-	// Make RNG Class
+
 	// Do the k-means routine a number of times, each time starting from
-	// different random centroids (use Rng::pickRandomIndices), and keep
+	// different random centroidIndices (use Rng::pickRandomIndices), and keep
 	// the best result of these repetitions.
 	for (int r = 0; r < repetitions; r++)
 	{
 		size_t numSteps = 0;
-		// TODO: perform an actual k-means run, starting from random centroids
+		// TODO: perform an actual k-means run, starting from random centroidIndices
 		//       (see rng.h)
 		// std::cerr << "TODO: implement this" << std::endl;
 		// First random centroid selection using given rng class
-		std::vector<size_t> centroidIndices = std::vector<size_t>(numClusters);
+		std::vector<size_t> centroidIndices(numClusters);
 		rng.pickRandomIndices(numRows, centroidIndices);
+		std::vector<int> clusters(numRows, -1); // Initialize all points to no cluster
+		// // std::cout << "Centroid Indices: " << std::endl;
+		// // for (size_t i = 0; i < centroidIndices.size(); i++)
+		// // {
+		// // 	std::cout << centroidIndices[i] << std::endl;
+		// // }
 
-		std::cout << "Centroid Indices: " << std::endl;
-		for (size_t i = 0; i < centroidIndices.size(); i++)
-		{
-			std::cout << centroidIndices[i] << std::endl;
-		}
-
-		std::vector<size_t> clusters = std::vector<size_t>(numRows); // 2D punten -> index
+		// std::vector<size_t> clusters = std::vector<size_t>(numRows); // 2D punten -> index
 
 		bool changed = true;
 
@@ -219,138 +214,101 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
 		{
 			// Set changed to false
 			changed = false;
-			int distanceSquaredSum = 0;
+			double distanceSquaredSum = 0;
 			// For each point in the dataset
-			for (int pointIndex = 0; pointIndex < numRows; ++pointIndex)
+			for (size_t pointIndex = 0; pointIndex < numRows; ++pointIndex)
 			{
+				std::pair<int, double> result = find_closest_centroid_index_and_distance(allData, pointIndex, centroidIndices, numCols);
+				int newCluster = result.first;
+				double dist = result.second;
+				distanceSquaredSum += dist;
 
-				// For the current point in the dataset, calculate the distance to each centroid and assign the point to the closest centroid
-				size_t newCentroidIndex = -1;
-				// Take the maximum value of size_t as the distance between the centroid and the point (largest distance so we can find the smallest distance)
-				double distanceBetweenCentroidAndPoint = std::numeric_limits<double>::max();
-				// get the point data
-				// std::cout << "Point Data: " << std::endl;
-				// for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-				// {
-				// 	std::cout << allData[pointIndex * numCols + dimensionIndex] << std::endl;
-				// }
-
-
-				// Old centroid index
-				std::cout << "Old centroid index: " << clusters[pointIndex] << std::endl;
-				find_closest_centroid_and_distance(allData, pointIndex, centroidIndices, distanceBetweenCentroidAndPoint, newCentroidIndex, numCols);
-				std::cout << "DISTANCE BETWEEN" << distanceBetweenCentroidAndPoint << std::endl;
-				// Oude staat in clusters[pointIndex]
-				// int oldCentroidIndex = clusters[pointIndex];
-				// std::cout << "Old centroid index: " << oldCentroidIndex;
-				// for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-				// {
-				// 	std::cout << allData[oldCentroidIndex * numCols + dimensionIndex] << std::endl;
-				// }
-
-				// std::cout << "Distance between centroid and point: " << distanceBetweenCentroidAndPoint << std::endl;
-				// std::cout << "New centroid index: " << newCentroidIndex << std::endl;
-				// for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-				// {
-				// 	std::cout << allData[newCentroidIndex * numCols + dimensionIndex] << std::endl;
-				// }
-
-
-				
-
-				// For each centroid in the dataset calculate the distance between the centroid and the point
-				// for (int centroidIndex = 0; centroidIndex < numClusters; ++centroidIndex)
-				// {
-				// 	// Calculate the distance between the centroid and the point
-				// 	size_t distance = 0;
-				// 	for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-				// 	{
-				// 		// Calculate the distance between the centroid and the point
-				// 		// print the centroid data and the point data
-				// 	}
-				// 	// If the distance between the centroid and the point is smaller than the current smallest distance, set the new smallest distance and the new centroid index
-				// 	if (distance < distanceBetweenCentroidAndPoint)
-				// 	{
-				// 		distanceBetweenCentroidAndPoint = distance;
-				// 		newCentroidIndex = centroidIndex;
-				// 	}
-				// }
-				// Check if the new centroid index is different from the old centroid index
-				// std::cout << "New centroid index: " << newCentroidIndex << std::endl;
-				// std::cout << "Old centroid index: " << clusters[pointIndex] << std::endl;
-				// std::cout << "-----------------------------------------------------------------------------" << std::endl;
-				if (newCentroidIndex != clusters[pointIndex])
-				{
-					// If the new centroid index is different from the old centroid index, set changed to true
+				if (newCluster != clusters[pointIndex]){
+					clusters[pointIndex] = newCluster;
 					changed = true;
-					// Set the new centroid index
-					clusters[pointIndex] = newCentroidIndex;
 				}
 			}
-			// If any of the points changed then recalculate the centroids to the new average of the points in the cluster
+			// If any of the points changed then recalculate the centroidIndices to the new average of the points in the cluster
 			if (changed)
 			{
-				// For each centroid in the dataset
-				for (int centroidIndex = 0; centroidIndex < numClusters; ++centroidIndex)
-				{
-					// For each dimension in the dataset
-					for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-					{
-						// Calculate the new centroid by taking the average of the points in the cluster
-						double newCentroid = 0;
-						int numPointsInCluster = 0;
-						// For each point in the dataset
-						for (int pointIndex = 0; pointIndex < numRows; ++pointIndex)
-						{
-							// If the point is in the current cluster
-							if (clusters[pointIndex] == centroidIndex)
-							{
-								// Add the value of the point in the current dimension to the new centroid
-								newCentroid += allData[pointIndex * numCols + dimensionIndex];
-								// Increment the number of points in the cluster
-								numPointsInCluster++;
-							}
-						}
-						// Calculate the average of the points in the cluster
-						newCentroid = newCentroid / numPointsInCluster;
-						// Find the nearest point in all datas to the new centroid
-						size_t nearestPointIndex = -1;
-						size_t nearestPointDistance = std::numeric_limits<size_t>::max();
-						// For each point in the dataset
-						for (int pointIndex = 0; pointIndex < numRows; ++pointIndex)
-						{
-							// Calculate the distance between the point and the new centroid
-							size_t distance = 0;
-							for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-							{
-								// Calculate the distance between the point and the new centroid
-								distance += pow(allData[pointIndex * numCols + dimensionIndex] - newCentroid, 2);
-							}
-							// If the distance between the point and the new centroid is smaller than the current smallest distance, set the new smallest distance and the new point index
-							if (distance < nearestPointDistance)
-							{
-								nearestPointDistance = distance;
-								nearestPointIndex = pointIndex;
-							}
-						}
-					}
-				}
+				numSteps++;
+				std::vector<std::vector<double>> newcentroidIndices(numClusters, std::vector<double>(numCols, 0));
+                std::vector<int> clusterCounts(numClusters, 0);
+                for (size_t p = 0; p < numRows; ++p) {
+                    int clusterIndex = clusters[p];
+                    for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex) {
+                        newcentroidIndices[clusterIndex][dimensionIndex] += allData[p * numCols + dimensionIndex];
+                    }
+                    clusterCounts[clusterIndex]++;
+                }
+
+                // Update centroidIndices with the closest point in allData
+                for (int j = 0; j < numClusters; ++j) {
+                    std::vector<double> newCentroid(numCols, 0);
+                    for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex) {
+                        if (clusterCounts[j] > 0) {
+                            newCentroid[dimensionIndex] = newcentroidIndices[j][dimensionIndex] / clusterCounts[j];
+                        }
+                    }
+                    
+                    // Find the closest point in allData to the newCentroid
+                    double minDistance = std::numeric_limits<double>::max();
+                    size_t closestPointIndex = 0;
+                    for (size_t dataIndex = 0; dataIndex < numRows; ++dataIndex) {
+                        double distance = 0;
+                        for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex) {
+                            double diff = allData[dataIndex * numCols + dimensionIndex] - newCentroid[dimensionIndex];
+                            distance += diff * diff;
+                        }
+						distance = sqrt(distance);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestPointIndex = dataIndex;
+                        }
+                    }
+                    
+                    // Update centroidIndices and newcentroidIndices
+                    centroidIndices[j] = closestPointIndex;
+                }
+			}
+
+			// Update best clustering if needed
+			if (distanceSquaredSum < bestDistSquaredSum) {
+				bestDistSquaredSum = distanceSquaredSum;
+				//bestClusters = clusters;
 			}
 		}
-		std::cout << "Centroid Indices (End): " << std::endl;
-		for (size_t i = 0; i < centroidIndices.size(); i++)
-		{
-			std::cout << centroidIndices[i] << std::endl;
-		}
-		std::cout << "Finished" << std::endl;
-
+		
 		stepsPerRepetition[r] = numSteps;
 
 		// Make sure debug logging is only done on first iteration ; subsequent checks
 		// with is_open will indicate that no logging needs to be done anymore.
+		std::cout << "Centroid Indices (End): " << std::endl;
+		std::string ownOutcome = "";
+		for (size_t i = 0; i < clusters.size(); i++)
+		{
+			ownOutcome += std::to_string(clusters[i])+',';
+		}
+		std::string outcome = "0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,2,0,0,0,0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0,0,0,2,0,2,1,0,0,0,1,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,2,2,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,2,2,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,1,0,2,2,1,0,0,0,0,2,0,2,1,0,0,0,2,0,1,2,0,1,0,0,2,0,0,1,0,0,0,1,0,2,0,2,2,0,0,2,2,0,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,1,0,2,0,0,0,0,0,0,0,2,2,0,0,0,0,2,0,0,2,0,2,0,0,0,0,0,0,0,2,0,0,2,1,2,0,2,0,0,2,0,0,1,1,0,2,0,0,0,0,0,0,0,0,2,2,2,0,0,0,0,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,0,2,2,0,0,2,0,0,0,0,0,2,0,0,0,2,0,2,0,0,0,0,2,0,0,0,0,2,2,2,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,2,1,0,0,1,2,2,2,1,";
+		std::cout << "----------OwnOutcome-------------" << std::endl;
+		std::cout << ownOutcome << std::endl;
+		std::cout << "----------OutCome-------------" << std::endl;
+		std::cout << outcome << std::endl;
+		if (ownOutcome == outcome) {
+			std::cout << "EQUAL" << std::endl;
+		} else {
+			std::cout << "NOT EQUAL" << std::endl;
+		}
 		centroidDebugFile.close();
 		clustersDebugFile.close();
 	}
+	for (size_t i = 0; i < stepsPerRepetition.size(); i++)
+	{
+		std::cout << stepsPerRepetition[i] << " ";
+	}
+	std::cout << "-----------------------------" << std::endl;
+	
+	
 
 	timer.stop();
 
