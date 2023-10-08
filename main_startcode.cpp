@@ -234,6 +234,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
 				numSteps++;
 				std::vector<std::vector<double>> newcentroidIndices(numClusters, std::vector<double>(numCols, 0));
                 std::vector<int> clusterCounts(numClusters, 0);
+				// Sum all dimensions and put in newCentroidIndices, later we devide this by count of points in that cluster
                 for (size_t p = 0; p < numRows; ++p) {
                     int clusterIndex = clusters[p];
                     for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex) {
@@ -242,7 +243,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                     clusterCounts[clusterIndex]++;
                 }
 
-                // Update centroidIndices with the closest point in allData
+                // Calculate the average, so we devided it with aantal points in that cluster
                 for (int j = 0; j < numClusters; ++j) {
                     std::vector<double> newCentroid(numCols, 0);
                     for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex) {
@@ -251,7 +252,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                         }
                     }
                     
-                    // Find the closest point in allData to the newCentroid
+                    // We need to find the closest point to generated new centroid, so we calculate distances and get the shortest one as the new centroid.
                     double minDistance = std::numeric_limits<double>::max();
                     size_t closestPointIndex = 0;
                     for (size_t dataIndex = 0; dataIndex < numRows; ++dataIndex) {
