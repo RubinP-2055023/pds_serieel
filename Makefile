@@ -6,7 +6,7 @@
 # Settings for optimized build
 FLAGS=-O3 -DNDEBUG -std=c++14
 
-# Settings for a debug build
+# Settings for a debug. build
 # FLAGS=-g -std=c++14
 
 all: kmeans
