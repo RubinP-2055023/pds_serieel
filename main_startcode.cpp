@@ -281,6 +281,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                 }
             }
             ++numSteps;
+            
             if (r == 0)
             {
                 std::cout << "Steps: ";
@@ -290,8 +291,16 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                     std::string myString = std::to_string(centroids[m * numCols]) + " , " + std::to_string(centroids[m * numCols + 1]);
                     std::cout << myString << std::endl;
                 }
+                
+                // Write the clustertrace to file
+                if (clustersDebugFile.is_open()) 
+                    clustersDebugFile.write(clusters);
+                
+                
             }
         }
+        
+
         // Keep track of the number of steps per repetition
         stepsPerRepetition[r] = numSteps;
         std::string ownOutcome = "";
