@@ -226,6 +226,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     double bestDistanceSquaredSum = std::numeric_limits<double>::max();
     std::vector<int> stepsPerRepetition(repetitions, 0);
 
+    std::vector<double> centroidsHistory;
     Timer timer;
     // Main k-means loop
     for (int r = 0; r < repetitions; r++)
@@ -236,13 +237,13 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
         generateCentroidsUsingRng(rng, allData, centroids, numClusters, numRows, numCols);
         if (r == 0)
         {
-            // DEBUGGING
-            for (size_t m = 0; m < centroids.size() / numCols; m++)
+            for (size_t j = 0; j < numClusters; j++)
             {
-                std::string myString = std::to_string(centroids[m * numCols]) + " , " + std::to_string(centroids[m * numCols + 1]);
-                std::cout << myString << std::endl;
+                for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
+                {
+                    centroidsHistory.push_back(centroids[j * numCols + dimensionIndex]);
+                }
             }
-            //
         }
         // Initialize cluster assignments
         std::vector<int> clusters(numRows, -1); // Initially, all points are unassigned to clusters
@@ -281,46 +282,21 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                 }
             }
             ++numSteps;
-            
             if (r == 0)
             {
-                std::cout << "Steps: ";
-                std::cout << numSteps << std::endl;
-                for (size_t m = 0; m < centroids.size() / numCols; m++)
+                for (size_t j = 0; j < numClusters; j++)
                 {
-                    std::string myString = std::to_string(centroids[m * numCols]) + " , " + std::to_string(centroids[m * numCols + 1]);
-                    std::cout << myString << std::endl;
+                    for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
+                    {
+                        centroidsHistory.push_back(centroids[j * numCols + dimensionIndex]);
+                    }
                 }
-                
-                // Write the clustertrace to file
                 if (clustersDebugFile.is_open()) 
                     clustersDebugFile.write(clusters);
-                
-                
-            }
+                }
         }
-        
-
         // Keep track of the number of steps per repetition
         stepsPerRepetition[r] = numSteps;
-        std::string ownOutcome = "";
-        for (size_t i = 0; i < clusters.size(); i++)
-        {
-            ownOutcome += std::to_string(clusters[i]) + ',';
-        }
-        std::string outcome = "0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,2,0,0,0,0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0,0,0,2,0,2,1,0,0,0,1,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,2,2,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,2,2,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,1,0,2,2,1,0,0,0,0,2,0,2,1,0,0,0,2,0,1,2,0,1,0,0,2,0,0,1,0,0,0,1,0,2,0,2,2,0,0,2,2,0,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,1,0,2,0,0,0,0,0,0,0,2,2,0,0,0,0,2,0,0,2,0,2,0,0,0,0,0,0,0,2,0,0,2,1,2,0,2,0,0,2,0,0,1,1,0,2,0,0,0,0,0,0,0,0,2,2,2,0,0,0,0,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,0,2,2,0,0,2,0,0,0,0,0,2,0,0,0,2,0,2,0,0,0,0,2,0,0,0,0,2,2,2,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,2,1,0,0,1,2,2,2,1,";
-        if (ownOutcome == outcome)
-        {
-            std::cout << "EQUAL" << std::endl;
-        }
-        else
-        {
-            std::cout << "NOT EQUAL" << std::endl;
-        }
-        std::cout << numSteps << std::endl;
-        std::cout << "Distance squared sum: ";
-        std::cout << distanceSquaredSum << std::endl;
-        // Step 4: Keep track of the best clustering
         if (distanceSquaredSum < bestDistanceSquaredSum)
         {
             bestClusters.assign(clusters.begin(), clusters.end());
@@ -338,9 +314,26 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
               << std::endl;
 
     // Write the number of steps per repetition, kind of a signature of the work involved
+    std::string linePrefix = "";
+
     csvOutputFile.write(stepsPerRepetition, "# Steps: ");
-    // Write best clusters to csvOutputFile, something like
     csvOutputFile.write(bestClusters);
+    csvOutputFile.close();
+
+    if (numClusters*numCols <= centroidsHistory.size()) {
+        centroidsHistory.erase(centroidsHistory.end() - numClusters*numCols, centroidsHistory.end());
+    }
+
+    if (centroidDebugFile.is_open()){
+        centroidDebugFile.write(centroidsHistory, numCols,linePrefix);
+        centroidDebugFile.close();
+    }
+
+    if (clustersDebugFile.is_open()){
+        //clustersDebugFile.write();
+        clustersDebugFile.close();
+    }
+
     return 0;
 }
 
