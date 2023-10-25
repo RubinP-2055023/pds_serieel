@@ -304,7 +304,6 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
 
     size_t numRows, numCols;
     std::vector<double> allData{};
-    std::vector<double> centroids{};
     readData(input, allData, numRows, numCols);
 
     // Initialize the best clusters and distance sum
@@ -316,6 +315,8 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     // Main k-means loop
     for (int r = 0; r < repetitions; r++)
     {
+        
+        std::vector<double> centroids{};
         // Step 1: Initialize oudeCentroids by randomly choosing k points
         std::vector<size_t> oudeCentroids = chooseoudeCentroidsAtRandom(rng, allData, centroids, numClusters, numRows, numCols);
         if (r == 0)
@@ -398,7 +399,8 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
         	std::cout << "NOT EQUAL" << std::endl;
         }
         std::cout << numSteps << std::endl;
-
+        std::cout << "Distance squared sum: ";
+        std::cout << distanceSquaredSum << std::endl;
         // Step 4: Keep track of the best clustering
         if (distanceSquaredSum < bestDistanceSquaredSum)
         {
