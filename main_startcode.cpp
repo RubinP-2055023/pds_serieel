@@ -131,72 +131,29 @@ FileCSVWriter openDebugFile(const std::string &n)
     return f;
 }
 
-std::pair<size_t, double> find_closest_centroid_index_and_distance(std::vector<double> &allData, int pointIndex, std::vector<size_t> &centroidIndices, int numCols)
-{
-    size_t closestCentroidIndex = 0;
-    double closestDistance = std::numeric_limits<double>::max();
-
-    for (size_t centroidIndex = 0; centroidIndex < centroidIndices.size(); ++centroidIndex)
-    {
-        double distance = 0;
-        for (int dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-        {
-            distance += pow(allData[centroidIndices[centroidIndex] * numCols + dimensionIndex] - allData[pointIndex * numCols + dimensionIndex], 2);
-        }
-
-        if (distance < closestDistance)
-        {
-            closestDistance = distance;
-            closestCentroidIndex = centroidIndex;
-        }
-    }
-    return std::make_pair(closestCentroidIndex, closestDistance);
-}
-
-std::vector<size_t> chooseoudeCentroidsAtRandom(Rng &rng, const std::vector<double> &allData, std::vector<double> &centroids, int numClusters, size_t numRows, size_t numCols)
+void generateCentroidsUsingRng(Rng &rng, const std::vector<double> &allData, std::vector<double> &centroids, int numClusters, size_t numRows, size_t numCols)
 {
     std::vector<size_t> centroidIndices(numClusters);
     rng.pickRandomIndices(numRows, centroidIndices);
-    
+
     // Read the centroids point from data and put in centroids vector.
     for (size_t centroidIndex = 0; centroidIndex < centroidIndices.size(); centroidIndex++)
     {
         for (size_t dimensionIndex = 0; dimensionIndex < numCols; dimensionIndex++)
         {
-            centroids.push_back(allData[centroidIndices[centroidIndex] * numCols + dimensionIndex]);
+            centroids[centroidIndex * numCols + dimensionIndex] = allData[centroidIndices[centroidIndex] * numCols + dimensionIndex];
         }
     }
-    return centroidIndices;
 }
 
 void findClosestCentroidIndexAndDistance(const std::vector<double> &allData, size_t pointIndex,
                                          const std::vector<double> &centroids,
                                          size_t &closestCentroidIndex, double &closestDistance, size_t numCols)
 {
-    // closestCentroidIndex = 0;
-    // closestDistance = std::numeric_limits<double>::max();
-
-    // for (size_t centroidIndex = 0; centroidIndex < centroidIndices.size(); ++centroidIndex)
-    // {
-    //     double distance = 0;
-
-    //     for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-    //     {
-    //         double diff = allData[pointIndex * numCols + dimensionIndex] - allData[centroidIndices[centroidIndex] * numCols + dimensionIndex];
-    //         distance += diff * diff;
-    //     }
-
-    //     if (distance < closestDistance)
-    //     {
-    //         closestDistance = distance;
-    //         closestCentroidIndex = centroidIndex;
-    //     }
-    // }
-
     closestCentroidIndex = 0;
     closestDistance = std::numeric_limits<double>::max();
     int countCentroids = centroids.size() / numCols;
-    for(size_t centroidIndex = 0; centroidIndex < countCentroids; centroidIndex++)
+    for (size_t centroidIndex = 0; centroidIndex < countCentroids; centroidIndex++)
     {
         double distance = 0;
         for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
@@ -211,30 +168,9 @@ void findClosestCentroidIndexAndDistance(const std::vector<double> &allData, siz
             closestCentroidIndex = centroidIndex;
         }
     }
-
 }
 
-void p(const std::vector<double> &allData, const std::vector<size_t> &centroidIndices, size_t numCols)
-{
-    for (size_t i = 0; i < centroidIndices.size(); i++)
-    {
-        for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-        {
-            size_t dataIndex = centroidIndices[i] * numCols + dimensionIndex;
-            std::cout << allData[dataIndex];
-            
-            // Add a comma if it's not the last dimension
-            if (dimensionIndex < numCols - 1)
-            {
-                std::cout << ',';
-            }
-        }
-        std::cout << std::endl;
-    }
-
-}
-
-std::vector<double> calculateCentroid(const std::vector<double> &allData, const std::vector<int> &clusters, size_t clusterIndex, size_t numCols)
+std::vector<double> calculateNewCentroid(const std::vector<double> &allData, const std::vector<int> &clusters, size_t clusterIndex, size_t numCols)
 {
     std::vector<double> newCentroid(numCols, 0);
     size_t numPoints = 0;
@@ -254,28 +190,7 @@ std::vector<double> calculateCentroid(const std::vector<double> &allData, const 
     {
         newCentroid[dimensionIndex] /= numPoints;
     }
-
     return newCentroid;
-    // double minDistance = std::numeric_limits<double>::max();
-    // size_t closestPointIndex = 0;
-    // for (size_t pointIndex = 0; pointIndex < clusters.size(); ++pointIndex)
-    // {
-    //     if (clusters[pointIndex] == clusterIndex)
-    //     {
-    //         double distance = 0;
-    //         for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
-    //         {
-    //             double diff = allData[pointIndex * numCols + dimensionIndex] - centroid[dimensionIndex];
-    //             distance += diff * diff;
-    //         }
-    //         if (distance < minDistance)
-    //         {
-    //             minDistance = distance;
-    //             closestPointIndex = pointIndex;
-    //         }
-    //     }
-    // }
-    // return closestPointIndex;
 }
 
 int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFileName,
@@ -303,7 +218,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     }
 
     size_t numRows, numCols;
-    std::vector<double> allData{};
+    std::vector<double> allData;
     readData(input, allData, numRows, numCols);
 
     // Initialize the best clusters and distance sum
@@ -315,30 +230,22 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     // Main k-means loop
     for (int r = 0; r < repetitions; r++)
     {
-        
-        std::vector<double> centroids{};
+
+        std::vector<double> centroids(numClusters * numCols);
         // Step 1: Initialize oudeCentroids by randomly choosing k points
-        std::vector<size_t> oudeCentroids = chooseoudeCentroidsAtRandom(rng, allData, centroids, numClusters, numRows, numCols);
+        generateCentroidsUsingRng(rng, allData, centroids, numClusters, numRows, numCols);
         if (r == 0)
         {
-            // for (size_t i = 0; i < oudeCentroids.size(); i++)
-            // {
-            //     std::cout << oudeCentroids[i] << std::endl;
-            // }
-            // p(allData, oudeCentroids, numCols);
-            for (size_t m = 0; m < centroids.size() / numCols;m++)
+            // DEBUGGING
+            for (size_t m = 0; m < centroids.size() / numCols; m++)
             {
-                std::string myString = std::to_string(centroids[m*numCols]) + " , " + std::to_string(centroids[m*numCols + 1]);
-                std::cout << myString<< std::endl;
+                std::string myString = std::to_string(centroids[m * numCols]) + " , " + std::to_string(centroids[m * numCols + 1]);
+                std::cout << myString << std::endl;
             }
+            //
         }
         // Initialize cluster assignments
         std::vector<int> clusters(numRows, -1); // Initially, all points are unassigned to clusters
-        // for (size_t i = 0; i < clusters.size(); i++)
-        // {
-        //     std::cout << clusters[i] << ",";
-        // }
-        // std::cout << std::endl;
 
         // Flags for tracking changes in clustering
         bool changed = true;
@@ -367,10 +274,10 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             // Step 3: Recalculate oudeCentroids based on current clustering
             for (size_t j = 0; j < numClusters; j++)
             {
-                std::vector<double> newCentroid = calculateCentroid(allData, clusters, j, numCols);
+                std::vector<double> newCentroid = calculateNewCentroid(allData, clusters, j, numCols);
                 for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
                 {
-                    centroids[j*numCols + dimensionIndex] = newCentroid[dimensionIndex];
+                    centroids[j * numCols + dimensionIndex] = newCentroid[dimensionIndex];
                 }
             }
             ++numSteps;
@@ -378,10 +285,10 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             {
                 std::cout << "Steps: ";
                 std::cout << numSteps << std::endl;
-                for (size_t m = 0; m < centroids.size() / numCols;m++)
+                for (size_t m = 0; m < centroids.size() / numCols; m++)
                 {
-                    std::string myString = std::to_string(centroids[m*numCols]) + " , " + std::to_string(centroids[m*numCols + 1]);
-                    std::cout << myString<< std::endl;
+                    std::string myString = std::to_string(centroids[m * numCols]) + " , " + std::to_string(centroids[m * numCols + 1]);
+                    std::cout << myString << std::endl;
                 }
             }
         }
@@ -390,13 +297,16 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
         std::string ownOutcome = "";
         for (size_t i = 0; i < clusters.size(); i++)
         {
-        	ownOutcome += std::to_string(clusters[i])+',';
+            ownOutcome += std::to_string(clusters[i]) + ',';
         }
         std::string outcome = "0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1,2,0,0,0,0,0,1,0,0,0,2,0,0,0,1,0,0,0,2,0,0,0,2,0,2,1,0,0,0,1,1,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,1,2,2,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,2,2,0,2,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,1,0,2,2,1,0,0,0,0,2,0,2,1,0,0,0,2,0,1,2,0,1,0,0,2,0,0,1,0,0,0,1,0,2,0,2,2,0,0,2,2,0,0,0,0,0,0,2,0,0,0,2,0,0,0,0,0,1,0,2,0,0,0,0,0,0,0,2,2,0,0,0,0,2,0,0,2,0,2,0,0,0,0,0,0,0,2,0,0,2,1,2,0,2,0,0,2,0,0,1,1,0,2,0,0,0,0,0,0,0,0,2,2,2,0,0,0,0,0,0,0,0,0,2,0,0,0,1,0,0,0,0,0,0,0,0,2,2,0,0,2,0,0,0,0,0,2,0,0,0,2,0,2,0,0,0,0,2,0,0,0,0,2,2,2,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,2,1,0,0,1,2,2,2,1,";
-        if (ownOutcome == outcome) {
-        	std::cout << "EQUAL" << std::endl;
-        } else {
-        	std::cout << "NOT EQUAL" << std::endl;
+        if (ownOutcome == outcome)
+        {
+            std::cout << "EQUAL" << std::endl;
+        }
+        else
+        {
+            std::cout << "NOT EQUAL" << std::endl;
         }
         std::cout << numSteps << std::endl;
         std::cout << "Distance squared sum: ";
