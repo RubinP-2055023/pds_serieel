@@ -325,7 +325,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             //     std::cout << oudeCentroids[i] << std::endl;
             // }
             // p(allData, oudeCentroids, numCols);
-            for (size_t m = 0; m < centroids.size();m++)
+            for (size_t m = 0; m < centroids.size() / numCols;m++)
             {
                 std::string myString = std::to_string(centroids[m*numCols]) + " , " + std::to_string(centroids[m*numCols + 1]);
                 std::cout << myString<< std::endl;
@@ -375,11 +375,12 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             ++numSteps;
             if (r == 0)
             {
-                for (size_t m = 0; m < centroids.size();m++)
+                std::cout << "Steps: ";
+                std::cout << numSteps << std::endl;
+                for (size_t m = 0; m < centroids.size() / numCols;m++)
                 {
-                    std::cout << centroids[m*numCols];
-                    std::cout << " , ";
-                    std::cout << centroids[m*numCols + 1] << std::endl;
+                    std::string myString = std::to_string(centroids[m*numCols]) + " , " + std::to_string(centroids[m*numCols + 1]);
+                    std::cout << myString<< std::endl;
                 }
             }
         }
