@@ -228,7 +228,8 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     std::vector<int> stepsPerRepetition(repetitions, 0);
 
     std::vector<double> centroidsHistory;
-    Timer timer;
+    // Timer timer;
+    double start_time = omp_get_wtime();
     // Main k-means loop
     for (int r = 0; r < repetitions; r++)
     {
@@ -307,13 +308,14 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
         }
     }
 
-    timer.stop();
+    // timer.stop();
+    double end_time = omp_get_wtime();
 
     // Some example output, of course you can log your timing data anyway you like.
     std::cerr << "# Type,blocks,threads,file,seed,clusters,repetitions,bestdistsquared,timeinseconds" << std::endl;
     std::cout << "sequential," << numBlocks << "," << numThreads << "," << inputFile << ","
               << rng.getUsedSeed() << "," << numClusters << ","
-              << repetitions << "," << bestDistanceSquaredSum << "," << timer.durationNanoSeconds() / 1e9
+              << repetitions << "," << bestDistanceSquaredSum << "," << end_time - start_time
               << std::endl;
 
     // Write the number of steps per repetition, kind of a signature of the work involved
