@@ -6,6 +6,7 @@
 #include "CSVWriter.hpp"
 #include "rng.h"
 #include "timer.h"
+#include <omp.h>
 
 void usage()
 {
@@ -259,6 +260,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             distanceSquaredSum = 0.0; // Initialize distance squared sum
 
             // Step 2: Assign each point to the nearest centroid
+            #pragma omp parallel for num_threads(numThreads) reduction(+:distanceSquaredSum)
             for (size_t p = 0; p < numRows; p++)
             {
                 size_t newCluster;
@@ -273,6 +275,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             }
 
             // Step 3: Recalculate oudeCentroids based on current clustering
+            #pragma omp parallel for num_threads(numThreads)
             for (size_t j = 0; j < numClusters; j++)
             {
                 std::vector<double> newCentroid = calculateNewCentroid(allData, clusters, j, numCols);
