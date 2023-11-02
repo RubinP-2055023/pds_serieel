@@ -6,4 +6,4 @@
 #SBATCH --time=00:5:00
 #SBATCH --error="%x.e%A"
 #SBATCH --output="%x.o%A"
-make serial
+make serialAll
