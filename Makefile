@@ -16,41 +16,70 @@ DATA_PATH = data
 DATA1 = mouse_500x2
 DATA2 = Frogs_MFCCs_7195x22
 DATA3 = 100000x5
+DATA4 = drivFaceD_606x6400
+DATA5 = 1M_1000000x4
 
 SERIAL_EX = my_serial_kmeans
 OMP_EX = my_omp_kmeans
 
-THREADS = 1
+THREADS = $(filter-out $@,$(MAKECMDGOALS))
+
+
 
 all: serial
 
-clean:
-	rm -f $(SERIAL_EX) $(OMP_EX) outputOmp/* outputSerial/*
+cleanSerial:
+	rm -f $(SERIAL_EX) outputSerial/*
 
-serial: clean mainSerial.cpp rng.cpp
+cleanOmp:
+	rm -f $(OMP_EX) outputOmp/*
+
+test: mainOmp.cpp rng.cpp
+
+	$(CXX) $(FLAGS) -o $(OMP_EX) -fopenmp mainOmp.cpp rng.cpp
+	$(eval DATA=$(DATA3))
+	#./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA4).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA4).csv --seed 1337 --k 10 --repetitions 20
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA).csv --output $(OUTPUT_OMP_PATH)/output$(DATA).csv --seed 1337 --k 10 --repetitions 20
+	#/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3)Ref.csv --seed 1337 --k 10 --repetitions 20
+	#/data/leuven/303/vsc30380/kmeans_serial_reference --threads $(THREADS) --input $(DATA_PATH)/$(DATA).csv --output $(OUTPUT_OMP_PATH)/output$(DATA)Ref.csv --seed 1337 --k 10 --repetitions 20
+
+serialAll: cleanSerial mainSerial.cpp rng.cpp
+	$(eval THREADS=)
 	$(CXX) $(FLAGS) -o $(SERIAL_EX) mainSerial.cpp rng.cpp
 	@echo
 	@echo "SERIAL VERSION:"
 	@echo
 	@echo "---------------------------------------------------------------------------------------------"
 	@echo
-	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA1).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA1).csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA1).csv
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA1).csv --seed 1337 --k 10 --repetitions 20
 	@echo
-	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA1)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA1)Ref.csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA1)Ref.csv
-	@echo
-	@echo "---------------------------------------------------------------------------------------------"
-	@echo
-	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA2).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA2).csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA2).csv
-	@echo
-	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA2)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA2)Ref.csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA2)Ref.csv
+	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA1)Ref.csv --seed 1337 --k 10 --repetitions 20
 	@echo
 	@echo "---------------------------------------------------------------------------------------------"
 	@echo
-	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA3).csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA3).csv
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA2).csv --seed 1337 --k 10 --repetitions 20
 	@echo
-	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA3)Ref.csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA3)Ref.csv
+	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA2)Ref.csv --seed 1337 --k 10 --repetitions 20
+	@echo
+	@echo "---------------------------------------------------------------------------------------------"
+	@echo
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1337 --k 10 --repetitions 20
+	@echo
+	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3)Ref.csv --seed 1337 --k 10 --repetitions 20
+	@echo
+	@echo "---------------------------------------------------------------------------------------------"
+	@echo
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA4).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA4).csv --seed 1337 --k 10 --repetitions 20
+	@echo
+	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA4).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA4)Ref.csv --seed 1337 --k 10 --repetitions 20
+	@echo
+	@echo "---------------------------------------------------------------------------------------------"
+	@echo
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA5).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA5).csv --seed 1337 --k 10 --repetitions 20
+	@echo
+	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA5).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA5)Ref.csv --seed 1337 --k 10 --repetitions 20
 
-omp: clean mainOmp.cpp rng.cpp
+ompAll: cleanOmp mainOmp.cpp rng.cpp
 	$(CXX) $(FLAGS) -o $(OMP_EX) -fopenmp  mainOmp.cpp rng.cpp
 	
 	@echo
@@ -58,23 +87,23 @@ omp: clean mainOmp.cpp rng.cpp
 	@echo
 	@echo "---------------------------------------------------------------------------------------------"
 	@echo
-	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA1).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA1).csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA1).csv
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_OMP_PATH)/output$(DATA1).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_OMP_PATH)/centroidT$(DATA1).csv --trace $(OUTPUT_OMP_PATH)/clusterT$(DATA1).csv
 	@echo
-	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA1)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA1)Ref.csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA1)Ref.csv
-	@echo
-	@echo "---------------------------------------------------------------------------------------------"
-	@echo
-	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA2).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA2).csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA2).csv
-	@echo
-	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA2)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA2)Ref.csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA2)Ref.csv
+	/data/leuven/303/vsc30380/kmeans_serial_reference --threads $(THREADS) --input $(DATA_PATH)/$(DATA1).csv --output $(OUTPUT_OMP_PATH)/output$(DATA1)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_OMP_PATH)/centroidT$(DATA1)Ref.csv --trace $(OUTPUT_OMP_PATH)/clusterT$(DATA1)Ref.csv
 	@echo
 	@echo "---------------------------------------------------------------------------------------------"
 	@echo
-	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA3).csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA3).csv
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_OMP_PATH)/output$(DATA2).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_OMP_PATH)/centroidT$(DATA2).csv --trace $(OUTPUT_OMP_PATH)/clusterT$(DATA2).csv
 	@echo
-	/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_SERIAL_PATH)/centroidT$(DATA3)Ref.csv --trace $(OUTPUT_SERIAL_PATH)/clusterT$(DATA3)Ref.csv
+	/data/leuven/303/vsc30380/kmeans_serial_reference --threads $(THREADS) --input $(DATA_PATH)/$(DATA2).csv --output $(OUTPUT_OMP_PATH)/output$(DATA2)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_OMP_PATH)/centroidT$(DATA2)Ref.csv --trace $(OUTPUT_OMP_PATH)/clusterT$(DATA2)Ref.csv
+	@echo
+	@echo "---------------------------------------------------------------------------------------------"
+	@echo
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3).csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_OMP_PATH)/centroidT$(DATA3).csv --trace $(OUTPUT_OMP_PATH)/clusterT$(DATA3).csv
+	@echo
+	/data/leuven/303/vsc30380/kmeans_serial_reference --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)Ref.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(OUTPUT_OMP_PATH)/centroidT$(DATA3)Ref.csv --trace $(OUTPUT_OMP_PATH)/clusterT$(DATA3)Ref.csv
 
-versus: serial omp
+both: serialAll ompAll
     
 compare:
 	./compare.py ./my_serial_kmeans /data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA2).csv --output $(COMPARE_PATH)/compare.csv --seed 1337 --k 10 --repetitions 20 --centroidtrace $(COMPARE_PATH)/centroidTrace.csv --trace $(COMPARE_PATH)/clusterTrace.csv
