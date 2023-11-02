@@ -154,6 +154,7 @@ void findClosestCentroidIndexAndDistance(const std::vector<double> &allData, siz
     closestCentroidIndex = 0;
     closestDistance = std::numeric_limits<double>::max();
     int countCentroids = centroids.size() / numCols;
+    
     for (size_t centroidIndex = 0; centroidIndex < countCentroids; centroidIndex++)
     {
         double distance = 0;
@@ -162,7 +163,6 @@ void findClosestCentroidIndexAndDistance(const std::vector<double> &allData, siz
             double diff = allData[pointIndex * numCols + dimensionIndex] - centroids[centroidIndex * numCols + dimensionIndex];
             distance += diff * diff;
         }
-
         if (distance < closestDistance)
         {
             closestDistance = distance;
@@ -228,8 +228,19 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     std::vector<int> stepsPerRepetition(repetitions, 0);
 
     std::vector<double> centroidsHistory;
-    // Timer timer;
-    double start_time = omp_get_wtime();
+
+
+    Timer timer(false);
+    double omp_start_time;
+    if(numThreads)
+    {
+        omp_start_time = omp_get_wtime();
+    }
+    else
+    {
+        timer.start();
+    }
+
     // Main k-means loop
     for (int r = 0; r < repetitions; r++)
     {
@@ -237,6 +248,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
         std::vector<double> centroids(numClusters * numCols);
         // Step 1: Initialize oudeCentroids by randomly choosing k points
         generateCentroidsUsingRng(rng, allData, centroids, numClusters, numRows, numCols);
+        
         if (r == 0)
         {
             for (size_t j = 0; j < numClusters; j++)
@@ -306,16 +318,25 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             bestClusters.assign(clusters.begin(), clusters.end());
             bestDistanceSquaredSum = distanceSquaredSum;
         }
+
     }
 
-    // timer.stop();
-    double end_time = omp_get_wtime();
+    double elapsed;
+    if(numThreads)
+    {
+        elapsed = omp_get_wtime() - omp_start_time;
+    }
+    else
+    {
+        timer.stop();
+        elapsed = timer.durationNanoSeconds() / 1e9;
+    }
 
     // Some example output, of course you can log your timing data anyway you like.
     std::cerr << "# Type,blocks,threads,file,seed,clusters,repetitions,bestdistsquared,timeinseconds" << std::endl;
     std::cout << "sequential," << numBlocks << "," << numThreads << "," << inputFile << ","
               << rng.getUsedSeed() << "," << numClusters << ","
-              << repetitions << "," << bestDistanceSquaredSum << "," << end_time - start_time
+              << repetitions << "," << bestDistanceSquaredSum << "," << elapsed
               << std::endl;
 
     // Write the number of steps per repetition, kind of a signature of the work involved
