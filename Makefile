@@ -34,12 +34,38 @@ cleanSerial:
 cleanOmp:
 	rm -f $(OMP_EX) outputOmp/*
 
+timing: mainSerial.cpp rng.cpp
+	$(CXX) $(FLAGS) -o $(SERIAL_EX) mainSerial.cpp rng.cpp
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3).csv --seed 1953139 --k 20 --repetitions 40
+
+timingOmp: mainOmp.cpp rng.cpp
+	$(CXX) $(FLAGS) -o $(OMP_EX) -fopenmp mainOmp.cpp rng.cpp
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)1.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)2.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)3.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)4.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)5.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)6.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)7.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)8.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)9.csv --seed 1953139 --k 20 --repetitions 40
+	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_OMP_PATH)/output$(DATA3)10.csv --seed 1953139 --k 20 --repetitions 40
+
 test: mainOmp.cpp rng.cpp
 
 	$(CXX) $(FLAGS) -o $(OMP_EX) -fopenmp mainOmp.cpp rng.cpp
 	$(eval DATA=$(DATA3))
-	#./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA4).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA4).csv --seed 1337 --k 10 --repetitions 20
-	./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA).csv --output $(OUTPUT_OMP_PATH)/output$(DATA).csv --seed 1337 --k 10 --repetitions 20
+	./$(SERIAL_EX) --input $(DATA_PATH)/$(DATA4).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA4).csv --seed 1337 --k 10 --repetitions 20
+	#./$(OMP_EX) --threads $(THREADS) --input $(DATA_PATH)/$(DATA).csv --output $(OUTPUT_OMP_PATH)/output$(DATA).csv --seed 1337 --k 10 --repetitions 20
 	#/data/leuven/303/vsc30380/kmeans_serial_reference --input $(DATA_PATH)/$(DATA3).csv --output $(OUTPUT_SERIAL_PATH)/output$(DATA3)Ref.csv --seed 1337 --k 10 --repetitions 20
 	#/data/leuven/303/vsc30380/kmeans_serial_reference --threads $(THREADS) --input $(DATA_PATH)/$(DATA).csv --output $(OUTPUT_OMP_PATH)/output$(DATA)Ref.csv --seed 1337 --k 10 --repetitions 20
 
