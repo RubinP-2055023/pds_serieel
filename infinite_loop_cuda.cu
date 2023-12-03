@@ -162,14 +162,14 @@ __global__ void findClosestCentroid(const double *data, const double *centroids,
             }
         }
 
-        if (clusters[pointIndex] != closestCentroidIndex)
-        {
-            atomicExch(changed, true); // Prevent race condition
+        if (clusters[pointIndex] != closestCentroidIndex) {
             clusters[pointIndex] = closestCentroidIndex;
+            distances[pointIndex] = closestDistance;
+            *changed = true; // Mark change if the point changes its cluster assignment
         }
-        distances[pointIndex] = closestDistance;
     }
 }
+
 
 __global__ void calculateNewCentroids(const double *data, const int *clusters, double *centroids, int numRows, int numClusters, int numCols)
 {
@@ -190,7 +190,6 @@ __global__ void calculateNewCentroids(const double *data, const int *clusters, d
                 }
             }
         }
-
         for (int dimensionIndex = 0; dimensionIndex < numCols; dimensionIndex++)
         {
             centroids[clusterIndex * numCols + dimensionIndex] = sharedData[clusterIndex * numCols + dimensionIndex] / numPoints;
@@ -212,7 +211,6 @@ void generateCentroidsUsingRng(Rng &rng, const std::vector<double> &allData, std
         }
     }
 }
-
 
 std::vector<double> calculateNewCentroid(const std::vector<double> &allData, const std::vector<int> &clusters, size_t clusterIndex, size_t numCols)
 {
@@ -236,7 +234,6 @@ std::vector<double> calculateNewCentroid(const std::vector<double> &allData, con
     }
     return newCentroid;
 }
-
 
 int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFileName,
            int numClusters, int repetitions, int numBlocks, int numThreads,
@@ -278,12 +275,13 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     int *deviceClusters;
     double *deviceDistances;
     bool *deviceChanged;
+    
     cudaMalloc((void **)&deviceData, numRows * numCols * sizeof(double));
     cudaMalloc((void **)&deviceCentroids, numClusters * numCols * sizeof(double));
     cudaMalloc((void **)&deviceClusters, numRows * sizeof(int));
     cudaMalloc((void **)&deviceDistances, numRows * sizeof(double));
     cudaMalloc((void **)&deviceChanged, sizeof(bool));
-    
+
     // Copy data from host to device
     cudaMemcpy(deviceData, allData.data(), numRows * numCols * sizeof(double), cudaMemcpyHostToDevice);
     
@@ -309,29 +307,30 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
         bool changed = true;
         double distanceSquaredSum; // Declare outside the while loop
         size_t numSteps = 0;
+    
+        // copy changed to device
         // Main k-means loop
-        // Changed boolean to device
-        cudaMemcpy(deviceChanged, changed, sizeof(bool), cudaMemcpyHostToDevice);
-
         while (changed)
         {
-            *changed = false;
+            changed = false;
+            cudaMemcpy(deviceChanged, &changed, sizeof(bool), cudaMemcpyHostToDevice);
             distanceSquaredSum = 0.0; // Initialize distance squared sum
 
             // Copy centroids to device
             cudaMemcpy(deviceCentroids, centroids.data(), numClusters * numCols * sizeof(double), cudaMemcpyHostToDevice);
 
             // Call the CUDA kernel to find the closest centroid for each point
-            findClosestCentroid<<<numBlocks, numThreads>>>(deviceData, deviceCentroids, deviceClusters, deviceDistances, numRows, numClusters, numCols, deviceChanged);
-            
+            int numElementsPerBlock = (numRows + numBlocks - 1) / numBlocks;
+            int numThreadsPerBlock = numThreads;
+            findClosestCentroid<<<numBlocks, numThreadsPerBlock>>>(deviceData, deviceCentroids, deviceClusters, deviceDistances, numRows, numClusters, numCols, deviceChanged);
+                
             // Copy cluster assignments and distances back to host
             cudaMemcpy(clusters.data(), deviceClusters, numRows * sizeof(int), cudaMemcpyDeviceToHost);
-                        cudaMemcpy(changed, deviceChanged, sizeof(bool), cudaMemcpyDeviceToHost);
 
             // Step 3: Recalculate centroids based on current clustering
             for (size_t j = 0; j < numClusters; j++)
             {
-                std::vector<double> newCentroid = calculateNewCentroids(allData, clusters, j, numCols);
+                std::vector<double> newCentroid = calculateNewCentroid(allData, clusters, j, numCols);
                 for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
                 {
                     centroids[j * numCols + dimensionIndex] = newCentroid[dimensionIndex];
@@ -352,6 +351,8 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                     clustersDebugFile.write(clusters);
                 }
             }
+            // Copy Changed back to host
+            cudaMemcpy(&changed, deviceChanged, sizeof(bool), cudaMemcpyDeviceToHost);
         }
         // Keep track of the number of steps per repetition
         stepsPerRepetition[r] = numSteps;
