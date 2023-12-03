@@ -12,8 +12,6 @@
 #include "rng.h"
 #include "timer.h"
 
-#define BLOCK_SIZE 1024
-
 __global__ void calculateDistance(const double *data, const double *centroids, int *clusters, double *dist_sum, int numRows, int numCols, int numClusters)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -287,8 +285,8 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
             distanceSquaredSum = 0.0; // Initialize distance squared sum
 
             // Step 2: Assign each point to the nearest centroid
-            dim3 gridDim((numRows + BLOCK_SIZE - 1) / BLOCK_SIZE);
-            dim3 blockDim(BLOCK_SIZE);
+            dim3 gridDim((numRows + numBlocks - 1) / numBlocks);
+            dim3 blockDim(numBlocks);
             calculateDistance<<<gridDim, blockDim>>>(data_dev, centroids_dev, clusters_dev, dist_sum_dev, numRows, numCols, numClusters);
             cudaDeviceSynchronize();
 
