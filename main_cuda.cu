@@ -2,71 +2,16 @@
 #include <fstream>
 #include <string>
 #include <cstdlib>
-#include <vector>
-#include <limits>
-#include <cmath>
-#include <cuda_runtime.h>
-
 #include "CSVReader.hpp"
 #include "CSVWriter.hpp"
 #include "rng.h"
 #include "timer.h"
-
-__global__ void calculateDistance(const double *data, const double *centroids, int *clusters, double *dist_sum, int numRows, int numCols, int numClusters)
-{
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < numRows)
-    {
-        double minDist = 1e9;
-        int minIdx = 0;
-        for (int i = 0; i < numClusters; i++)
-        {
-            double dist = 0;
-            for (int j = 0; j < numCols; j++)
-            {
-                double diff = data[tid * numCols + j] - centroids[i * numCols + j];
-                dist += diff * diff;
-            }
-            if (dist < minDist)
-            {
-                minDist = dist;
-                minIdx = i;
-            }
-        }
-        clusters[tid] = minIdx;
-        atomicAdd(dist_sum, sqrt(minDist));
-    }
-}
-
-__global__ void updateCentroids(const double *data, const int *clusters, double *centroids, int numRows, int numCols, int numClusters)
-{
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int dimension = tid % numCols;
-    int clusterIdx = tid / numCols;
-
-    if (dimension >= numCols || clusterIdx >= numClusters)
-    {
-        return;
-    }
-
-    double sum = 0.0;
-    int count = 0;
-
-    for (int i = 0; i < numRows; i++)
-    {
-        if (clusters[i] == clusterIdx)
-        {
-            sum += data[i * numCols + dimension];
-            count++;
-        }
-    }
-
-    if (count > 0)
-    {
-        centroids[clusterIdx * numCols + dimension] = sum / count;
-    }
-}
-
+#include <cuda.h>
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#include <thrust/transform.h>
+#include <thrust/functional.h>
+#include <thrust/reduce.h>
 void usage()
 {
     std::cerr << R"XYZ(
@@ -142,7 +87,7 @@ Arguments:
 }
 
 // Helper function to read input file into allData, setting number of detected
-// rows and columns. Feel free to use, adapt, or ignore
+// rows and columns. Feel free to use, adapt or ignore
 void readData(std::ifstream &input, std::vector<double> &allData, size_t &numRows, size_t &numCols)
 {
     if (!input.is_open())
@@ -165,7 +110,7 @@ void readData(std::ifstream &input, std::vector<double> &allData, size_t &numRow
             if (numColsExpected <= 0)
                 throw std::runtime_error("Unexpected error: 0 columns");
         }
-        else if (numColsExpected != static_cast<int>(row.size()))
+        else if (numColsExpected != (int)row.size())
             throw std::runtime_error("Incompatible number of colums read in line " + std::to_string(line) + ": expecting " + std::to_string(numColsExpected) + " but got " + std::to_string(row.size()));
 
         for (auto x : row)
@@ -174,8 +119,8 @@ void readData(std::ifstream &input, std::vector<double> &allData, size_t &numRow
         line++;
     }
 
-    numRows = allData.size() / numColsExpected;
-    numCols = numColsExpected;
+    numRows = (size_t)allData.size() / numColsExpected;
+    numCols = (size_t)numColsExpected;
 }
 
 FileCSVWriter openDebugFile(const std::string &n)
@@ -206,6 +151,158 @@ void generateCentroidsUsingRng(Rng &rng, const std::vector<double> &allData, std
     }
 }
 
+__global__ void findClosestCentroidKernel(const double *allData, const double *centroids,
+                                          int *clusters, bool *changes, double *distanceSquaredSum,
+                                          size_t numCols, size_t numRows, int numClusters, int loopSize, int offset)
+{
+    // Calculate newCluster and set the flag for changes
+    size_t tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+    for (int i = 0; i < loopSize; i++)
+    {
+
+        int index = tid + i * offset;
+        if (index < numRows)
+        {
+            double closestDistance = 1e9;
+            size_t closestCentroidIndex = 0;
+
+            for (size_t centroidIndex = 0; centroidIndex < numClusters; centroidIndex++)
+            {
+                double distance = 0;
+                for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
+                {
+                    double diff = allData[index * numCols + dimensionIndex] - centroids[centroidIndex * numCols + dimensionIndex];
+                    distance += diff * diff;
+                }
+
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestCentroidIndex = centroidIndex;
+                }
+            }
+
+            if (closestCentroidIndex != clusters[index])
+            {
+                clusters[index] = closestCentroidIndex;
+                changes[index] = true;
+            }
+
+            atomicAdd(distanceSquaredSum, closestDistance);
+        }
+    }
+}
+
+void findClosestCentroidCUDA(const double *allData, const double *centroids,
+                             int *clusters, thrust::device_vector<bool> &changes, double &distanceSquaredSum, size_t numCols, size_t numRows, int numClusters, int numThreads, int numBlocks)
+{
+    // Allocate device memory for data
+    thrust::device_vector<double> d_allData(allData, allData + numRows * numCols);
+    thrust::device_vector<double> d_centroids(centroids, centroids + numClusters * numCols);
+    thrust::device_vector<int> d_clusters(clusters, clusters + numRows);
+
+    double *d_distanceSquaredSum;
+    cudaMalloc(&d_distanceSquaredSum, sizeof(double));
+    cudaMemcpy(d_distanceSquaredSum, &distanceSquaredSum, sizeof(double), cudaMemcpyHostToDevice);
+
+    // Launch CUDA kernel
+
+    int threads = numThreads;
+    int loopSize = (numRows + threads * numBlocks - 1) / (threads * numBlocks);
+    int offset = threads * numBlocks;
+
+    findClosestCentroidKernel<<<numBlocks, threads>>>(thrust::raw_pointer_cast(d_allData.data()),
+                                                      thrust::raw_pointer_cast(d_centroids.data()),
+                                                      thrust::raw_pointer_cast(d_clusters.data()),
+                                                      thrust::raw_pointer_cast(changes.data()),
+                                                      d_distanceSquaredSum,
+                                                      numCols, numRows, numClusters, loopSize, offset);
+
+    // Synchronize the device to ensure the kernel completes before returning
+    cudaDeviceSynchronize();
+
+    // Copy results back to host if needed
+    thrust::copy(d_clusters.begin(), d_clusters.end(), clusters);
+    // No need to copy changes back to host if you don't need it on the host
+    // Copy the updated distanceSquaredSum back to host
+    cudaMemcpy(&distanceSquaredSum, d_distanceSquaredSum, sizeof(double), cudaMemcpyDeviceToHost);
+
+    // Free allocated device memory
+    cudaFree(d_distanceSquaredSum);
+}
+
+__global__ void accumulateCentroidsAndCountPointsKernel(const double *allData, double *newCentroids, int *clusterNumPoints,
+                                                        const int *clusters, size_t numCols, size_t numPoints, size_t numClusters, int loopSize, int offset)
+{
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for (int i = 0; i < loopSize; i++)
+    {
+        int index = tid + i * offset;
+
+        if (index < numPoints)
+        {
+            int clusterIndex = clusters[index];
+            // Accumulate values for new centroids
+            for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
+            {
+                atomicAdd(&newCentroids[clusterIndex * numCols + dimensionIndex], allData[index * numCols + dimensionIndex]);
+            }
+            // Increment the count of points associated with the cluster
+            atomicAdd(&clusterNumPoints[clusterIndex], 1);
+        }
+    }
+}
+
+// Fix kernel launch parameters
+__global__ void normalizeCentroidsKernel(double *newCentroids, const int *clusterNumPoints, size_t numCols, size_t numClusters, int loopSize, int offset)
+{
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for (int i = 0; i < loopSize; i++)
+    {
+        int index = tid + i * offset;
+
+        if (index < numClusters)
+        {
+            for (size_t dimensionIndex = 0; dimensionIndex < numCols; ++dimensionIndex)
+            {
+                newCentroids[index * numCols + dimensionIndex] /= clusterNumPoints[index];
+            }
+        }
+    }
+}
+void calculateNewCentroidCUDA(const double *allData, double *centroids, const int *clusters, size_t numCols, size_t numRows, int numClusters, int numThreads, int numBlocks)
+{
+    // Allocate device memory for data
+    thrust::device_vector<double> d_allData(allData, allData + numRows * numCols);
+    thrust::device_vector<double> d_centroids(centroids, centroids + numClusters * numCols);
+    thrust::device_vector<int> d_clusters(clusters, clusters + numRows);
+    std::vector<double> newCentroid(numCols * numClusters, 0);
+    thrust::device_vector<double> d_newCentroids = newCentroid;
+    thrust::device_vector<int> d_clusterNumPoints(numClusters, 0);
+
+    int threads = numThreads;
+    int loopSize = (numRows + threads * numBlocks - 1) / (threads * numBlocks);
+    int offset = threads * numBlocks;
+
+    accumulateCentroidsAndCountPointsKernel<<<numBlocks, threads>>>(thrust::raw_pointer_cast(d_allData.data()),
+                                                                      thrust::raw_pointer_cast(d_newCentroids.data()),
+                                                                      thrust::raw_pointer_cast(d_clusterNumPoints.data()),
+                                                                      thrust::raw_pointer_cast(d_clusters.data()),
+                                                                      numCols, numRows, numClusters, loopSize, offset);
+    cudaDeviceSynchronize();
+    
+    loopSize = (numClusters + threads * numBlocks - 1) / (threads * numBlocks);
+
+    normalizeCentroidsKernel<<<numBlocks, threads>>>(thrust::raw_pointer_cast(d_newCentroids.data()),
+                                                                                       thrust::raw_pointer_cast(d_clusterNumPoints.data()),
+                                                                                       numCols, numClusters, loopSize, offset);
+    cudaDeviceSynchronize();
+    thrust::copy(d_newCentroids.begin(), d_newCentroids.end(), centroids);
+}
+
 int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFileName,
            int numClusters, int repetitions, int numBlocks, int numThreads,
            const std::string &centroidDebugFileName, const std::string &clusterDebugFileName)
@@ -234,16 +331,18 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
     readData(input, allData, numRows, numCols);
 
     // Initialize the best clusters and distance sum
-    std::vector<int> bestClusters(numRows); // To store the cluster assignments
+    std::vector<size_t> bestClusters(numRows); // To store the cluster assignments
     double bestDistanceSquaredSum = std::numeric_limits<double>::max();
     std::vector<int> stepsPerRepetition(repetitions, 0);
 
     std::vector<double> centroidsHistory;
     Timer timer;
     // Main k-means loop
-    // Main k-means loop
+    // Initialize changes vector
+    thrust::device_vector<bool> changes(numRows, false);
     for (int r = 0; r < repetitions; r++)
     {
+
         std::vector<double> centroids(numClusters * numCols);
         generateCentroidsUsingRng(rng, allData, centroids, numClusters, numRows, numCols);
         if (r == 0)
@@ -256,47 +355,29 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                 }
             }
         }
-
-        // Allocate memory on GPU
-        double *data_dev;
-        double *centroids_dev;
-        int *clusters_dev;
-        double *dist_sum_dev;
-
-        cudaMalloc((void **)&data_dev, numRows * numCols * sizeof(double));
-        cudaMalloc((void **)&centroids_dev, numClusters * numCols * sizeof(double));
-        cudaMalloc((void **)&clusters_dev, numRows * sizeof(int));
-        cudaMalloc((void **)&dist_sum_dev, sizeof(double));
-
-        // Copy data to GPU
-        cudaMemcpy(data_dev, allData.data(), numRows * numCols * sizeof(double), cudaMemcpyHostToDevice);
-        cudaMemcpy(centroids_dev, centroids.data(), numClusters * numCols * sizeof(double), cudaMemcpyHostToDevice);
+        // Initialize cluster assignments
+        std::vector<int> clusters(numRows, -1); // Initially, all points are unassigned to clusters
 
         // Flags for tracking changes in clustering
         bool changed = true;
         double distanceSquaredSum; // Declare outside the while loop
         size_t numSteps = 0;
-
-        std::vector<int> prevClusters(numRows, -1);
         // Main k-means loop
         while (changed)
         {
-            changed = false;
-            distanceSquaredSum = 0.0; // Initialize distance squared sum
-
-            // Step 2: Assign each point to the nearest centroid
-            dim3 gridDim((numRows + numBlocks - 1) / numBlocks);
-            dim3 blockDim(numBlocks);
-            calculateDistance<<<gridDim, blockDim>>>(data_dev, centroids_dev, clusters_dev, dist_sum_dev, numRows, numCols, numClusters);
-            cudaDeviceSynchronize();
-
-            // Step 3: Recalculate centroids based on current clustering
-            updateCentroids<<<gridDim, blockDim>>>(data_dev, clusters_dev, centroids_dev, numRows, numCols, numClusters);
-            cudaDeviceSynchronize();
-
-            // Copy cluster assignments from GPU to host
-            cudaMemcpy(bestClusters.data(), clusters_dev, numRows * sizeof(int), cudaMemcpyDeviceToHost);
-            cudaMemcpy(&distanceSquaredSum, dist_sum_dev, sizeof(double), cudaMemcpyDeviceToHost);
+            // Calculate
+            {
+                changed = false;
+                distanceSquaredSum = 0.0;
+                thrust::fill(changes.begin(), changes.end(), false);
+                findClosestCentroidCUDA(allData.data(), centroids.data(), clusters.data(), changes, distanceSquaredSum, numCols, numRows, numClusters, numThreads, numBlocks);
+                changed = thrust::count(changes.begin(), changes.end(), true) > 0;
+                cudaDeviceSynchronize();
+            }
+            {
+                calculateNewCentroidCUDA(allData.data(), centroids.data(), clusters.data(), numCols, numRows, numClusters, numThreads, numBlocks);
+                cudaDeviceSynchronize();
+            }
 
             ++numSteps;
             if (r == 0)
@@ -309,41 +390,24 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
                     }
                 }
                 if (clustersDebugFile.is_open())
-                    clustersDebugFile.write(bestClusters);
+                    clustersDebugFile.write(clusters);
             }
-
-            // Check if any data points have changed their cluster assignment
-            for (size_t i = 0; i < numRows; ++i)
-            {
-                if (bestClusters[i] != prevClusters[i])
-                {
-                    changed = true;
-                    break;
-                }
-            }
-
-            // Copy the current cluster assignments to prevClusters for comparison in the next iteration
-            prevClusters = bestClusters;
         }
         // Keep track of the number of steps per repetition
         stepsPerRepetition[r] = numSteps;
-
         if (distanceSquaredSum < bestDistanceSquaredSum)
         {
+            std::cout << "Best r: " << r << " with " << numSteps << " steps." << std::endl;
+            bestClusters.assign(clusters.begin(), clusters.end());
             bestDistanceSquaredSum = distanceSquaredSum;
         }
-
-        // Free memory on GPU
-        cudaFree(data_dev);
-        cudaFree(centroids_dev);
-        cudaFree(clusters_dev);
-        cudaFree(dist_sum_dev);
     }
+
     timer.stop();
 
     // Some example output, of course you can log your timing data anyway you like.
     std::cerr << "# Type,blocks,threads,file,seed,clusters,repetitions,bestdistsquared,timeinseconds" << std::endl;
-    std::cout << "cuda," << numBlocks << "," << numThreads << "," << inputFile << ","
+    std::cout << "sequential," << numBlocks << "," << numThreads << "," << inputFile << ","
               << rng.getUsedSeed() << "," << numClusters << ","
               << repetitions << "," << bestDistanceSquaredSum << "," << timer.durationNanoSeconds() / 1e9
               << std::endl;
@@ -369,6 +433,7 @@ int kmeans(Rng &rng, const std::string &inputFile, const std::string &outputFile
 
     if (clustersDebugFile.is_open())
     {
+        // clustersDebugFile.write();
         clustersDebugFile.close();
     }
 
